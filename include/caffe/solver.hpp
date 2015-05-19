@@ -3,7 +3,6 @@
 
 #include <string>
 #include <vector>
-
 #include "caffe/net.hpp"
 
 namespace caffe {
@@ -20,43 +19,80 @@ class Solver {
   explicit Solver(const SolverParameter& param);
   explicit Solver(const string& param_file);
   void Init(const SolverParameter& param);
+    
+  //Two sets of Nets will be intialized, question is: why do we need two of them?
   void InitTrainNet();
   void InitTestNets();
+    
+    
+    
   // The main entry of the solver function. In default, iter will be zero. Pass
   // in a non-zero iter number to resume training for a pre-trained net.
+  // How does this function work?
+  // inline function: the compiler will replace the function whereever they are by the actuall code. Advantage is to speed up.
   virtual void Solve(const char* resume_file = NULL);
   inline void Solve(const string resume_file) { Solve(resume_file.c_str()); }
+    
+    
+  // What does this function do?
   void Step(int iters);
+    
+    
+    
   // The Restore function implements how one should restore the solver to a
   // previously snapshotted state. You should implement the RestoreSolverState()
   // function that restores the state from a SolverState protocol buffer.
   void Restore(const char* resume_file);
+    
+    
+  //destructor.
   virtual ~Solver() {}
+    
+  //To get the protected variable "net_"
   inline shared_ptr<Net<Dtype> > net() { return net_; }
   inline const vector<shared_ptr<Net<Dtype> > >& test_nets() {
     return test_nets_;
   }
   int iter() { return iter_; }
 
+ //protected can be accessed by:
+ //   member function of the class;
+ //   friend of the class;
+ //   classes derived with public or protected access from the class;
+ //   direct privately derived classes have private access to protected members.
  protected:
   // Get the update value for the current iteration.
   virtual void ComputeUpdateValue() = 0;
+
+  // Very important
   // The Solver::Snapshot function implements the basic snapshotting utility
   // that stores the learned net. You should implement the SnapshotSolverState()
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
   void Snapshot();
+    
+    
   // The test routine
   void TestAll();
   void Test(const int test_net_id = 0);
+    
+    
   virtual void SnapshotSolverState(SolverState* state) = 0;
   virtual void RestoreSolverState(const SolverState& state) = 0;
+    
+  //What does this function do?
   void DisplayOutputBlobs(const int net_id);
 
+  //These are the private variables
   SolverParameter param_;
   int iter_;
   int current_step_;
+    
+  // The net_ we will train
+    
   shared_ptr<Net<Dtype> > net_;
+  
+  //A vector of Nets that will be tested on: Why? A vector of them?
   vector<shared_ptr<Net<Dtype> > > test_nets_;
 
   DISABLE_COPY_AND_ASSIGN(Solver);
@@ -66,24 +102,34 @@ class Solver {
 /**
  * @brief Optimizes the parameters of a Net using
  *        stochastic gradient descent (SGD) with momentum.
+ *        
+ *        Class is defined upon a template name. For our experiment right now, it tends to be float, int, etcs.
  */
 template <typename Dtype>
 class SGDSolver : public Solver<Dtype> {
  public:
+  // About the keyword "explicit": it prevents the compiler to use single parameter constructors to convert from one type to another
+  // in order to get the right type for a parameter.
+  // Here the constructor do : Solve(..)...{A()....;} which is same with {Solve(...); A();}
   explicit SGDSolver(const SolverParameter& param)
       : Solver<Dtype>(param) { PreSolve(); }
   explicit SGDSolver(const string& param_file)
       : Solver<Dtype>(param_file) { PreSolve(); }
-
+  
+  //Return a reference of history_. History is to maintain the historical momentum data so that we can update the parameters.
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
 
  protected:
+  
+  //What does this do?
   void PreSolve();
   Dtype GetLearningRate();
   virtual void ComputeUpdateValue();
   virtual void ClipGradients();
+    
   virtual void SnapshotSolverState(SolverState * state);
   virtual void RestoreSolverState(const SolverState& state);
+    
   // history maintains the historical momentum data.
   // update maintains update related data and is not needed in snapshots.
   // temp maintains other information that might be needed in computation
@@ -125,11 +171,13 @@ class AdaGradSolver : public SGDSolver<Dtype> {
   DISABLE_COPY_AND_ASSIGN(AdaGradSolver);
 };
 
+//pass in the parameter as reference: any change to param inside this function will also be changed outside the function
 template <typename Dtype>
 Solver<Dtype>* GetSolver(const SolverParameter& param) {
   SolverParameter_SolverType type = param.solver_type();
 
   switch (type) {
+  // Initiate different types of solvers
   case SolverParameter_SolverType_SGD:
       return new SGDSolver<Dtype>(param);
   case SolverParameter_SolverType_NESTEROV:
@@ -145,3 +193,13 @@ Solver<Dtype>* GetSolver(const SolverParameter& param) {
 }  // namespace caffe
 
 #endif  // CAFFE_OPTIMIZATION_SOLVER_HPP_
+
+
+
+
+
+
+
+
+
+

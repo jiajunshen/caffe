@@ -9,6 +9,8 @@
 
 namespace caffe {
 
+    
+//Split the shared blob outputs into two blobs?
 void InsertSplits(const NetParameter& param, NetParameter* param_split) {
   // Initialize by copying from the input NetParameter.
   param_split->CopyFrom(param);

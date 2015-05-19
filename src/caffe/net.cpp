@@ -35,15 +35,25 @@ template <typename Dtype>
 void Net<Dtype>::Init(const NetParameter& in_param) {
   // Set phase from the state.
   phase_ = in_param.state().phase();
+
+    
+    
   // Filter layers based on their include/exclude rules and
   // the current NetState.
+  // Functionality of this layer: Two separate different layers based on what phase this net is in. For eg: we shouldn't have test data layer in the training phase.
   NetParameter filtered_param;
   FilterNet(in_param, &filtered_param);
+    
+    
+  // Output all the net parameters.
   LOG(INFO) << "Initializing net from parameters: " << std::endl
             << filtered_param.DebugString();
+    
+    
   // Create a copy of filtered_param with splits added where necessary.
   NetParameter param;
   InsertSplits(filtered_param, &param);
+
   // Basically, build all the layers and set up their connections.
   name_ = param.name();
   map<string, int> blob_name_to_idx;
@@ -62,6 +72,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   // set the input blobs
   for (int input_id = 0; input_id < param.input_size(); ++input_id) {
     const int layer_id = -1;  // inputs have fake layer ID -1
+    //Append the blobs between layers
+    //
     AppendTop(param, layer_id, input_id, &available_blobs, &blob_name_to_idx);
   }
   DLOG(INFO) << "Memory required for data: " << memory_used_ * sizeof(Dtype);
@@ -72,6 +84,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   param_id_vecs_.resize(param.layer_size());
   top_id_vecs_.resize(param.layer_size());
   bottom_need_backward_.resize(param.layer_size());
+    
   for (int layer_id = 0; layer_id < param.layer_size(); ++layer_id) {
     // Inherit phase from net if unset.
     if (!param.layer(layer_id).has_phase()) {
@@ -315,11 +328,19 @@ template <typename Dtype>
 void Net<Dtype>::AppendTop(const NetParameter& param, const int layer_id,
                            const int top_id, set<string>* available_blobs,
                            map<string, int>* blob_name_to_idx) {
+
+  //Create the Blob layer parameter with layer_id = -1
   shared_ptr<LayerParameter> layer_param((layer_id >= 0) ?
     (new LayerParameter(param.layer(layer_id))) : NULL);
+
+    
+  // To add top_id to the blob parameters
+  // Why do we compare the top_size with top_id? What is top_size, what is top_id??
   const string& blob_name = layer_param ?
       (layer_param->top_size() > top_id ?
           layer_param->top(top_id) : "(automatic)") : param.input(top_id);
+    
+  // What does this step mean?: If this is in-place computation, i.e the bottom and the top blob could be the same to preserve memory consumption.
   // Check if we are doing in-place computation
   if (blob_name_to_idx && layer_param && layer_param->bottom_size() > top_id &&
       blob_name == layer_param->bottom(top_id)) {
@@ -386,9 +407,11 @@ int Net<Dtype>::AppendBottom(const NetParameter& param,
   return blob_id;
 }
 
+//Give layer id, insert blob layer between operational layers.
 template <typename Dtype>
 void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
                              const int param_id) {
+  // Why do we compare the param_size with param_id
   const LayerParameter& layer_param = layers_[layer_id]->layer_param();
   const int param_size = layer_param.param_size();
   string param_name =

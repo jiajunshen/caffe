@@ -13,6 +13,11 @@
 
 namespace caffe {
 
+    
+/* These two are the constructors for the Solver.
+ * Take the Reference SolverParameter& param as the input to initiate.
+ * Reference: changing param inside here will lead to a change in the original file.
+ */
 template <typename Dtype>
 Solver<Dtype>::Solver(const SolverParameter& param)
     : net_() {
@@ -27,6 +32,11 @@ Solver<Dtype>::Solver(const string& param_file)
   Init(param);
 }
 
+    
+    
+    
+    
+    
 template <typename Dtype>
 void Solver<Dtype>::Init(const SolverParameter& param) {
   LOG(INFO) << "Initializing solver from parameters: " << std::endl
@@ -44,15 +54,24 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   current_step_ = 0;
 }
 
+    
+    
+//The initialization function calls this function
 template <typename Dtype>
 void Solver<Dtype>::InitTrainNet() {
   const int num_train_nets = param_.has_net() + param_.has_net_param() +
       param_.has_train_net() + param_.has_train_net_param();
   const string& field_names = "net, net_param, train_net, train_net_param";
+    
+    
+  // Why do we need this?
   CHECK_GE(num_train_nets, 1) << "SolverParameter must specify a train net "
       << "using one of these fields: " << field_names;
   CHECK_LE(num_train_nets, 1) << "SolverParameter must not contain more than "
       << "one of these fields specifying a train_net: " << field_names;
+
+    
+  //Intialization the training net parameters.
   NetParameter net_param;
   if (param_.has_train_net_param()) {
     LOG(INFO) << "Creating training net specified in train_net_param.";
@@ -70,15 +89,19 @@ void Solver<Dtype>::InitTrainNet() {
     LOG(INFO) << "Creating training net from net file: " << param_.net();
     ReadNetParamsFromTextFileOrDie(param_.net(), &net_param);
   }
+    
   // Set the correct NetState.  We start with the solver defaults (lowest
   // precedence); then, merge in any NetState specified by the net_param itself;
   // finally, merge in any NetState specified by the train_state (highest
   // precedence).
   NetState net_state;
+  // Set Phase. WHY?
   net_state.set_phase(TRAIN);
   net_state.MergeFrom(net_param.state());
   net_state.MergeFrom(param_.train_state());
   net_param.mutable_state()->CopyFrom(net_state);
+    
+  //Create a new training net
   net_.reset(new Net<Dtype>(net_param));
 }
 
@@ -412,6 +435,8 @@ Dtype SGDSolver<Dtype>::GetLearningRate() {
   return rate;
 }
 
+    
+//What is PreSolve()?
 template <typename Dtype>
 void SGDSolver<Dtype>::PreSolve() {
   // Initialize the history

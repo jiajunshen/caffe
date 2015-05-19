@@ -32,10 +32,14 @@ DEFINE_int32(iterations, 50,
     "The number of iterations to run.");
 
 // A simple registry for caffe commands.
+
+// What is BrewFunction()? defining a function pointer to point to a future function.
 typedef int (*BrewFunction)();
 typedef std::map<caffe::string, BrewFunction> BrewMap;
 BrewMap g_brew_map;
 
+
+//Define a function called RegisterBrewFunction: which add the defined function into the hashmap: g_brew_map<string, BrewFunction>
 #define RegisterBrewFunction(func) \
 namespace { \
 class __Registerer_##func { \
@@ -47,6 +51,9 @@ class __Registerer_##func { \
 __Registerer_##func g_registerer_##func; \
 }
 
+
+//Main Function will call this
+//Get BrewFunction: what are they? what is g_brew_map?
 static BrewFunction GetBrewFunction(const caffe::string& name) {
   if (g_brew_map.count(name)) {
     return g_brew_map[name];
@@ -75,10 +82,16 @@ int device_query() {
   caffe::Caffe::DeviceQuery();
   return 0;
 }
+
+// Where does this function go? RegisterBrewFunction??
 RegisterBrewFunction(device_query);
 
 // Load the weights from the specified caffemodel(s) into the train and
 // test nets.
+
+//Read caffemodels specified by the argv, copy all the layers in the given model list
+//Create the new solver: again where is the solver created?
+//Read the solvers
 void CopyLayers(caffe::Solver<float>* solver, const std::string& model_list) {
   std::vector<std::string> model_names;
   boost::split(model_names, model_list, boost::is_any_of(",") );
@@ -98,11 +111,21 @@ int train() {
       << "Give a snapshot to resume training or weights to finetune "
       "but not both.";
 
+ // SolverParameter is the message defined inside the caffe.prototxt
+ // Need to spend more time reading that.
   caffe::SolverParameter solver_param;
+    
+  //FLAGS_solver is the solver definition protocol passed from the commandline. solver_param is the reference of
+  //  SolverParameter
+    
+  //We have caffe.pb.cc inside .build_release/src/caffe/proto/caffe.pb.cc
   caffe::ReadProtoFromTextFileOrDie(FLAGS_solver, &solver_param);
 
   // If the gpu flag is not provided, allow the mode and device to be set
   // in the solver prototxt.
+    
+  //Set FLAGS_gpu if it is not specified in the commandline: it will be set by the parameter in SolverParamter protocol
+  // Default is always -1: we always assume we are using CPU.
   if (FLAGS_gpu < 0
       && solver_param.solver_mode() == caffe::SolverParameter_SolverMode_GPU) {
     FLAGS_gpu = solver_param.device_id();
@@ -119,9 +142,26 @@ int train() {
   }
 
   LOG(INFO) << "Starting Optimization";
-  shared_ptr<caffe::Solver<float> >
+    
+    
+  //Get the solver using the solver_param
+  // A container for a raw smart pointer.
+  //Introduction of Smart Pointer:
+  //http://en.wikipedia.org/wiki/Smart_pointer#shared_ptr_and_weak_ptr
+  //  std::shared_ptr<int> p1(new int(5)); //p1 owns the memory
+  //  std::shared_ptr<int> p2 = p1; //p1 and p2 owns the memory
+  //  The memory space won't delete until p1 and p2 are reseted
+  //  Delete the memory: p1.reset(); p2.reset();
+  //GetSolver(...) is defined in solver.hpp
+    
+    
+    shared_ptr<caffe::Solver<float> >
     solver(caffe::GetSolver<float>(solver_param));
+  
+  //Use Snapshot if it contains snapshot.
+  //Use predefined weights if it contains predefined weights
 
+  //Then it start to optimize: solve()!!!
   if (FLAGS_snapshot.size()) {
     LOG(INFO) << "Resuming from " << FLAGS_snapshot;
     solver->Solve(FLAGS_snapshot);
@@ -134,6 +174,8 @@ int train() {
   LOG(INFO) << "Optimization Done.";
   return 0;
 }
+
+//Again, registerBrewFunction. What is it?
 RegisterBrewFunction(train);
 
 
@@ -152,6 +194,7 @@ int test() {
     Caffe::set_mode(Caffe::CPU);
   }
   // Instantiate the caffe net.
+  // During the training, we don't know the FLAGS_model? The model definition?
   Net<float> caffe_net(FLAGS_model, caffe::TEST);
   caffe_net.CopyTrainedLayersFrom(FLAGS_weights);
   LOG(INFO) << "Running for " << FLAGS_iterations << " iterations.";
@@ -159,17 +202,26 @@ int test() {
   vector<Blob<float>* > bottom_vec;
   vector<int> test_score_output_id;
   vector<float> test_score;
+    
+  //What is this step doing? What is the result vec?
   float loss = 0;
   for (int i = 0; i < FLAGS_iterations; ++i) {
     float iter_loss;
+    //Create a vector of results that hold the Forward results in ith iteration.
+    //What is inside the result? This Blob is containing what information?
     const vector<Blob<float>*>& result =
         caffe_net.Forward(bottom_vec, &iter_loss);
+      
+    //Add ith loss into the total loss; By the way, how is the loss calculated? Loss function?
     loss += iter_loss;
     int idx = 0;
+    
     for (int j = 0; j < result.size(); ++j) {
       const float* result_vec = result[j]->cpu_data();
       for (int k = 0; k < result[j]->count(); ++k, ++idx) {
         const float score = result_vec[k];
+        // What are test scores and test output ids recording?
+          
         if (i == 0) {
           test_score.push_back(score);
           test_score_output_id.push_back(j);
@@ -184,6 +236,8 @@ int test() {
   }
   loss /= FLAGS_iterations;
   LOG(INFO) << "Loss: " << loss;
+    
+  //Mainly works for outputting the scores and losses?
   for (int i = 0; i < test_score.size(); ++i) {
     const std::string& output_name = caffe_net.blob_names()[
         caffe_net.output_blob_indices()[test_score_output_id[i]]];
@@ -200,6 +254,8 @@ int test() {
 
   return 0;
 }
+
+//RegisterBrewFunction again.
 RegisterBrewFunction(test);
 
 
@@ -307,6 +363,7 @@ int main(int argc, char** argv) {
   // Run tool or show usage.
   caffe::GlobalInit(&argc, &argv);
   if (argc == 2) {
+    //returning a function name
     return GetBrewFunction(caffe::string(argv[1]))();
   } else {
     gflags::ShowUsageWithFlagsRestrict(argv[0], "tools/caffe");
